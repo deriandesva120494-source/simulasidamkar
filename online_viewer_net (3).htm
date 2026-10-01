@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Damkar: Taman Nasional Bukit Tiga Puluh</title>
+    <!-- MathJax untuk render rumus matematika presisi -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #0b190e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px; }
+        
+        /* Modal Setup / Start Screen */
+        #setup-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.88);
+            display: flex; justify-content: center; align-items: center; z-index: 2000;
+        }
+        .modal-card {
+            background: #14351b; border: 3px solid #4ade80; border-radius: 16px; padding: 25px 30px; width: 90%; max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: left;
+        }
+        .modal-card h2 { color: #facc15; margin-bottom: 12px; font-size: 22px; text-align: center; }
+        .modal-card p { margin-bottom: 15px; line-height: 1.6; font-size: 14px; color: #d1fae5; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: bold; color: #a7f3d0; font-size: 14px; }
+        .form-group input { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #34d399; background: #061208; color: white; font-size: 15px; }
+        .btn { background: #22c55e; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; width: 100%; transition: background 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn:hover { background: #16a34a; }
+        .btn-wa { background: #25D366; margin-top: 10px; }
+        .btn-wa:hover { background: #1da851; }
+
+        /* Main Game Layout */
+        #game-container { width: 100%; max-width: 1280px; display: none; flex-direction: column; gap: 15px; }
+        header { display: flex; justify-content: space-between; align-items: center; background: #064e3b; padding: 12px 25px; border-radius: 12px; border: 2px solid #059669; }
+        .stats { display: flex; gap: 20px; font-size: 16px; font-weight: bold; }
+        .stat-item { background: #022c22; padding: 8px 15px; border-radius: 8px; border: 1px solid #047857; color: #facc15; }
+
+        /* Game Board Area */
+        .board-wrapper { 
+            position: relative; width: 100%; border-radius: 12px; overflow: hidden; 
+            border: 4px solid #059669; box-shadow: 0 8px 25px rgba(0,0,0,0.7); background: #0b1c0e;
+        }
+        .board-bg { width: 100%; display: block; object-fit: cover; }
+
+        /* Post Markers with Animated Fire Aura */
+        .pos-node {
+            position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; cursor: pointer; z-index: 10;
+            transition: transform 0.2s;
+        }
+        .pos-node:hover { transform: translate(-50%, -50%) scale(1.15); }
+
+        /* Dynamic Flame Glow / Fire Animation (Tanpa gambar api menumpuk) */
+        .pos-circle {
+            width: 42px; height: 42px; border-radius: 50%; background: #dc2626; border: 3px solid #fff;
+            display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 15px; color: white;
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.8); position: relative;
+        }
+        
+        /* Animasi Api Hilang Timbul / Pulse Cahaya Api untuk Pos Aktif */
+        .pos-node.active .pos-circle {
+            background: #f59e0b; border-color: #facc15;
+            animation: firePulse 1.2s infinite alternate ease-in-out;
+        }
+        
+        @keyframes firePulse {
+            0% {
+                box-shadow: 0 0 10px 2px #f59e0b, 0 0 20px 6px #ef4444, 0 0 30px 10px #dc2626;
+                transform: scale(1);
+            }
+            100% {
+                box-shadow: 0 0 18px 6px #facc15, 0 0 30px 12px #f97316, 0 0 45px 16px #ef4444;
+                transform: scale(1.1);
+            }
+        }
+
+        /* Pos yang sudah padam (Api Hilang) */
+        .pos-node.cleared .pos-circle {
+            background: #22c55e; border-color: #86efac; box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
+            animation: none;
+        }
+
+        /* Mobil Pemadam Kebakaran */
+        #truck-sprite {
+            position: absolute; width: 85px; height: auto; transform: translate(-50%, -50%);
+            transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1); z-index: 25; pointer-events: none;
+            filter: drop-shadow(0 6px 8px rgba(0,0,0,0.6));
+        }
+
+        /* Efek Semprotan Air */
+        #water-spray {
+            position: absolute; width: 75px; height: 75px; transform: translate(-50%, -50%);
+            background: radial-gradient(circle, rgba(56,189,248,0.9) 0%, rgba(14,165,233,0) 75%);
+            border-radius: 50%; z-index: 30; display: none; pointer-events: none;
+            animation: sprayEffect 0.8s ease-out;
+        }
+        @keyframes sprayEffect { 0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; } }
+
+        /* Panel Pak Damaran & Panduan */
+        .info-panel { display: grid; grid-template-columns: 280px 1fr; gap: 15px; }
+        .character-box { background: #064e3b; border-radius: 12px; padding: 15px; border: 2px solid #059669; display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .character-box img { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; border: 3px solid #34d399; margin-bottom: 10px; background: #0b1c0e; }
+        .speech-bubble { background: #022c22; padding: 12px; border-radius: 8px; border: 1px solid #059669; font-size: 13px; line-height: 1.4; color: #a7f3d0; margin-top: 5px; }
+
+        .mission-guide { background: #064e3b; border-radius: 12px; padding: 18px 22px; border: 2px solid #059669; display: flex; flex-direction: column; justify-content: space-between; }
+        .mission-guide h3 { color: #facc15; margin-bottom: 6px; font-size: 15px; }
+        .mission-guide p { font-size: 13px; line-height: 1.5; color: #d1fae5; }
+
+        /* Modal Soal & Pembahasan */
+        #question-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.88);
+            display: none; justify-content: center; align-items: center; z-index: 3000;
+        }
+        .q-card { background: #064e3b; border: 3px solid #facc15; border-radius: 16px; padding: 25px 30px; width: 90%; max-width: 680px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); max-height: 90vh; overflow-y: auto; }
+        .q-card h2 { color: #facc15; margin-bottom: 12px; font-size: 18px; }
+        .q-card p { font-size: 15px; line-height: 1.7; margin-bottom: 20px; color: #ecfdf5; }
+        .options-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+        .option-btn { background: #022c22; border: 2px solid #059669; padding: 12px 16px; border-radius: 8px; color: white; text-align: left; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .option-btn:hover { background: #047857; border-color: #34d399; }
+        .option-btn.correct { background: #15803d; border-color: #4ade80; }
+        .option-btn.wrong { background: #b91c1c; border-color: #f87171; }
+
+        /* Box Pembahasan */
+        .explanation-box {
+            display: none; background: #022c22; border: 2px dashed #4ade80; border-radius: 10px;
+            padding: 15px 18px; margin-top: 15px; margin-bottom: 15px; color: #d1fae5; font-size: 14px; line-height: 1.6;
+        }
+        .explanation-box h4 { color: #facc15; margin-bottom: 8px; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+
+        /* Modal Laporan Akhir */
+        #report-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.88);
+            display: none; justify-content: center; align-items: center; z-index: 4000;
+        }
+        .report-card { background: #064e3b; border: 3px solid #22c55e; border-radius: 16px; padding: 30px; width: 90%; max-width: 580px; text-align: center; }
+        .report-card h2 { color: #facc15; margin-bottom: 12px; }
+        .report-stats { background: #022c22; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; font-size: 14px; line-height: 1.8; border: 1px solid #059669; }
+    </style>
+</head>
+<body>
+
+    <!-- MODAL PENDAFTARAN SISWA -->
+    <div id="setup-modal">
+        <div class="modal-card">
+            <h2>🛡️ Simulasi Damkar: Taman Nasional Bukit Tiga Puluh</h2>
+            <p><strong>Latar Belakang Misi:</strong> Seorang pengusaha culas membakar hutan secara ilegal di dekat kawasan Taman Nasional Bukit Tiga Puluh. Terjadi 10 titik api yang menyebabkan kabut asap tebal. Bantu <strong>Pak Damaran</strong> memadamkan seluruh titik api sebelum merambat ke kawasan taman nasional!</p>
+            
+            <div class="form-group">
+                <label for="student-name">Nama Lengkap Siswa:</label>
+                <input type="text" id="student-name" placeholder="Masukkan nama lengkap...">
+            </div>
+            <div class="form-group">
+                <label for="student-class">Kelas:</label>
+                <input type="text" id="student-class" placeholder="Contoh: X IPA 1 / XI-B...">
+            </div>
+            <div class="form-group">
+                <label for="teacher-phone">Nomor WA Guru (Opsional):</label>
+                <input type="text" id="teacher-phone" placeholder="Contoh: 628123456789">
+            </div>
+            <button class="btn" onclick="startSimulation()">Mulai Misi Pemadaman 🚒</button>
+        </div>
+    </div>
+
+    <!-- UTAMA GAME SIMULASI -->
+    <div id="game-container">
+        <header>
+            <div>
+                <h1 style="font-size: 18px; color: #facc15;">🔥 Operasi Pemadaman Kebakaran Hutan Bukit Tiga Puluh</h1>
+                <p id="player-info" style="font-size: 13px; color: #a7f3d0; margin-top: 2px;"></p>
+            </div>
+            <div class="stats">
+                <div class="stat-item">Skor: <span id="score-val">0</span> / 100</div>
+                <div class="stat-item">Pos Selesai: <span id="progress-val">0</span> / 10</div>
+            </div>
+        </header>
+
+        <!-- PETA UTAMA -->
+        <div class="board-wrapper" id="board-wrapper">
+            <img src="input_file_0.png" class="board-bg" alt="Peta Taman Nasional Bukit Tiga Puluh" onerror="this.src='ChatGPT Image 1 Okt 2026, 21.09.31.png'">
+            
+            <img src="truck.png" id="truck-sprite" alt="Mobil Damkar" onerror="this.style.display='none'">
+            
+            <div id="water-spray"></div>
+
+            <!-- 10 POS TITIK API (Animasi Cahaya Api Hilang Timbul saat Aktif, Hilang saat Padam) -->
+            <div class="pos-node active" id="pos-node-1" style="top: 31%; left: 24%;" onclick="openPosQuestion(1)">
+                <div class="pos-circle" id="circle-1">1</div>
+            </div>
+            <div class="pos-node" id="pos-node-2" style="top: 42%; left: 39%;" onclick="openPosQuestion(2)">
+                <div class="pos-circle" id="circle-2">2</div>
+            </div>
+            <div class="pos-node" id="pos-node-3" style="top: 47%; left: 56%;" onclick="openPosQuestion(3)">
+                <div class="pos-circle" id="circle-3">3</div>
+            </div>
+            <div class="pos-node" id="pos-node-4" style="top: 42%; left: 77%;" onclick="openPosQuestion(4)">
+                <div class="pos-circle" id="circle-4">4</div>
+            </div>
+            <div class="pos-node" id="pos-node-5" style="top: 56%; left: 90%;" onclick="openPosQuestion(5)">
+                <div class="pos-circle" id="circle-5">5</div>
+            </div>
+            <div class="pos-node" id="pos-node-6" style="top: 75%; left: 84%;" onclick="openPosQuestion(6)">
+                <div class="pos-circle" id="circle-6">6</div>
+            </div>
+            <div class="pos-node" id="pos-node-7" style="top: 78%; left: 66%;" onclick="openPosQuestion(7)">
+                <div class="pos-circle" id="circle-7">7</div>
+            </div>
+            <div class="pos-node" id="pos-node-8" style="top: 79%; left: 48%;" onclick="openPosQuestion(8)">
+                <div class="pos-circle" id="circle-8">8</div>
+            </div>
+            <div class="pos-node" id="pos-node-9" style="top: 71%; left: 28%;" onclick="openPosQuestion(9)">
+                <div class="pos-circle" id="circle-9">9</div>
+            </div>
+            <div class="pos-node" id="pos-node-10" style="top: 54%; left: 18%;" onclick="openPosQuestion(10)">
+                <div class="pos-circle" id="circle-10">10</div>
+            </div>
+        </div>
+
+        <!-- PANEL KARAKTER & KETERANGAN -->
+        <div class="info-panel">
+            <div class="character-box">
+                <img src="damaran.png" alt="Pak Damaran" onerror="this.src='input_file_0.png'">
+                <h3 style="color: #facc15; font-size: 15px;">Pak Damaran</h3>
+                <div class="speech-bubble" id="damaran-speech">
+                    "Halo kawan! Klik Pos 1 yang berkedip dengan efek api untuk mulai memadamkan titik api dan menghentikan kabut asap!"
+                </div>
+            </div>
+            <div class="mission-guide">
+                <div>
+                    <h3>🎯 Tujuan Pembelajaran Matematika:</h3>
+                    <p>Siswa mampu menyelesaikan masalah kontekstual (pertumbuhan & peluruhan) yang berkaitan dengan fungsi dan persamaan eksponensial (berbasis sama) dalam situasi kebakaran hutan dan penanganan kabut asap.</p>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px; color: #a7f3d0;">
+                    💡 <strong>Petunjuk Simulasi:</strong> Jawab soal dengan benar untuk melihat pembahasan lengkap, menyiram air, memadamkan api, dan melajukan mobil Damkar ke pos berikutnya!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SOAL & PEMBAHASAN -->
+    <div id="question-modal">
+        <div class="q-card">
+            <h2 id="q-title">Pos 1</h2>
+            <p id="q-text">Memuat soal...</p>
+            <div class="options-list" id="q-options"></div>
+
+            <!-- Box Pembahasan (Tampil setelah menjawab benar) -->
+            <div class="explanation-box" id="explanation-box">
+                <h4>💡 Pembahasan Soal:</h4>
+                <div id="explanation-content"></div>
+            </div>
+
+            <button class="btn" id="next-pos-btn" style="display: none; margin-top: 10px;" onclick="proceedToNextPos()">Lanjutkan Ke Pos Berikutnya 🚒</button>
+        </div>
+    </div>
+
+    <!-- MODAL LAPORAN AKHIR -->
+    <div id="report-modal">
+        <div class="report-card">
+            <h2>🎉 Misi Penyelamatan Berhasil!</h2>
+            <p>Seluruh 10 titik api telah dipadamkan. Taman Nasional Bukit Tiga Puluh berhasil diselamatkan dan kualitas udara warga kembali bersih!</p>
+            <div class="report-stats" id="report-details"></div>
+            
+            <p style="font-size: 13px; color: #a7f3d0; margin-bottom: 8px;">Salinan laporan hasil belajar siswa:</p>
+            <textarea id="report-text" style="width: 100%; height: 90px; background: #022c22; color: #4ade80; padding: 10px; border-radius: 8px; border: 1px solid #059669; font-size: 12px; resize: none;" readonly></textarea>
+            
+            <button class="btn" style="margin-top: 12px;" onclick="copyReport()">Salin Skor ke Clipboard 📋</button>
+            <button class="btn btn-wa" id="btn-send-wa" onclick="sendToWhatsApp()">Kirim Laporan ke WhatsApp Guru 📲</button>
+        </div>
+    </div>
+
+    <script>
+        let playerName = "";
+        let playerClass = "";
+        let teacherPhone = "";
+        let currentScore = 0;
+        let currentPos = 1;
+
+        const posCoordinates = {
+            1: { top: 31, left: 24 },
+            2: { top: 42, left: 39 },
+            3: { top: 47, left: 56 },
+            4: { top: 42, left: 77 },
+            5: { top: 56, left: 90 },
+            6: { top: 75, left: 84 },
+            7: { top: 78, left: 66 },
+            8: { top: 79, left: 48 },
+            9: { top: 71, left: 28 },
+            10: { top: 54, left: 18 }
+        };
+
+        const simulationQuestions = {
+            1: {
+                title: "Pos 1: Titik Awal Penyebaran Kebakaran",
+                text: "Luas area hutan terbakar awal adalah \\(8\\) hektar (\\(2^3\\) ha). Luas area meluas dua kali lipat setiap \\(2\\) jam (\\(2^t\\)). Berapakah luas area terbakar setelah \\(6\\) jam (\\(t = 6\\))?",
+                options: [
+                    { text: "A. \\(32\\) hektar", correct: false },
+                    { text: "B. \\(64\\) hektar", correct: true },
+                    { text: "C. \\(128\\) hektar", correct: false },
+                    { text: "D. \\(256\\) hektar", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Luas awal = \\(2^3 = 8\\) ha.<br>" +
+                    "• Periode penggandaan per \\(2\\) jam = \\(\\frac{6}{2} = 3\\) kali.<br>" +
+                    "• Luas akhir = \\(2^3 \\times 2^3 = 2^{3+3} = 2^6 = 64\\) hektar."
+            },
+            2: {
+                title: "Pos 2: Lonjakan Konsentrasi Asap PM2.5",
+                text: "Konsentrasi partikulat debu asap di pemukiman warga dirumuskan dengan fungsi eksponensial \\(P(t) = 50 \\times 2^{\\frac{t}{3}}\\), dengan \\(t\\) dalam jam. Berapa konsentrasi partikulat pada jam ke-6 (\\(t = 6\\))?",
+                options: [
+                    { text: "A. \\(100 \\text{ µg/m³}\\)", correct: false },
+                    { text: "B. \\(150 \\text{ µg/m³}\\)", correct: false },
+                    { text: "C. \\(200 \\text{ µg/m³}\\)", correct: true },
+                    { text: "D. \\(400 \\text{ µg/m³}\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Substitusi \\(t = 6\\) ke dalam fungsi \\(P(t)\\):<br>" +
+                    "• \\(P(6) = 50 \\times 2^{\\frac{6}{3}} = 50 \\times 2^2 = 50 \\times 4 = 200 \\text{ µg/m³}\\)."
+            },
+            3: {
+                title: "Pos 3: Persamaan Laju Pertumbuhan Titik Api",
+                text: "Jumlah titik api di sektor timur berkembang mengikuti persamaan eksponensial basis sama \\(3^{2x - 1} = 27\\). Berapakah nilai \\(x\\) (dalam jam) agar laju pertumbuhan api dapat dinetralisir?",
+                options: [
+                    { text: "A. \\(x = 1\\)", correct: false },
+                    { text: "B. \\(x = 2\\)", correct: true },
+                    { text: "C. \\(x = 3\\)", correct: false },
+                    { text: "D. \\(x = 4\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Samakan basis kedua ruas: \\(27 = 3^3\\)<br>" +
+                    "• \\(3^{2x - 1} = 3^3 \\implies 2x - 1 = 3\\)<br>" +
+                    "• \\(2x = 4 \\implies x = 2\\) jam."
+            },
+            4: {
+                title: "Pos 4: Peluruhan Kadar Oksigen Bersih",
+                text: "Kadar oksigen bersih di sekitar pos pengamatan berkurang separuh setiap \\(4\\) jam sesuai fungsi peluruhan \\(O(t) = 32 \\times \\left(\\frac{1}{2}\\right)^{\\frac{t}{4}}\\). Berapa kadar oksigen tersisa setelah \\(8\\) jam?",
+                options: [
+                    { text: "A. \\(16\\) satuan", correct: false },
+                    { text: "B. \\(8\\) satuan", correct: true },
+                    { text: "C. \\(4\\) satuan", correct: false },
+                    { text: "D. \\(2\\) satuan", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Substitusi \\(t = 8\\) ke dalam fungsi peluruhan:<br>" +
+                    "• \\(O(8) = 32 \\times \\left(\\frac{1}{2}\\right)^{\\frac{8}{4}} = 32 \\times \\left(\\frac{1}{2}\\right)^2 = 32 \\times \\frac{1}{4} = 8\\) satuan."
+            },
+            5: {
+                title: "Pos 5: Persamaan Peningkatan Volume Asap Tebal",
+                text: "Volume asap tebal di wilayah hulu sungai memenuhi persamaan eksponensial basis sama \\(4^x = 64\\). Tentukan nilai \\(x\\) yang menunjukkan durasi penyebaran dalam jam.",
+                options: [
+                    { text: "A. \\(x = 2\\)", correct: false },
+                    { text: "B. \\(x = 3\\)", correct: true },
+                    { text: "C. \\(x = 4\\)", correct: false },
+                    { text: "D. \\(x = 5\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Nyatakan \\(64\\) dalam bentuk basis \\(4\\): \\(64 = 4^3\\)<br>" +
+                    "• \\(4^x = 4^3 \\implies x = 3\\) jam."
+            },
+            6: {
+                title: "Pos 6: Pemulihan Efektivitas Vegetasi Penyerap Polutan",
+                text: "Daya serap vegetasi tersisa terhadap asap meningkat sesuai fungsi eksponensial \\(E(t) = 10 \\times 2^{\\frac{t}{2}}\\). Berapa tingkat efektivitas penyerapan pada jam ke-4 (\\(t = 4\\))?",
+                options: [
+                    { text: "A. \\(20\\)", correct: false },
+                    { text: "B. \\(40\\)", correct: true },
+                    { text: "C. \\(80\\)", correct: false },
+                    { text: "D. \\(160\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Substitusi \\(t = 4\\):<br>" +
+                    "• \\(E(4) = 10 \\times 2^{\\frac{4}{2}} = 10 \\times 2^2 = 10 \\times 4 = 40\\)."
+            },
+            7: {
+                title: "Pos 7: Persamaan Pertumbuhan Hotspot Satelit",
+                text: "Jumlah titik panas (hotspot) yang terdeteksi satelit memenuhi persamaan eksponensial basis sama \\(2^{x+1} = 32\\). Berapakah nilai \\(x\\)?",
+                options: [
+                    { text: "A. \\(x = 2\\)", correct: false },
+                    { text: "B. \\(x = 3\\)", correct: false },
+                    { text: "C. \\(x = 4\\)", correct: true },
+                    { text: "D. \\(x = 5\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Ubah \\(32\\) menjadi basis \\(2\\): \\(32 = 2^5\\)<br>" +
+                    "• \\(2^{x+1} = 2^5 \\implies x + 1 = 5 \\implies x = 4\\)."
+            },
+            8: {
+                title: "Pos 8: Kepadatan Asap Pemukiman Warga",
+                text: "Tingkat kepadatan kabut asap di desa terdekat dirumuskan dengan persamaan \\(5^{3x-2} = 125\\). Berapakah nilai \\(x\\)?",
+                options: [
+                    { text: "A. \\(x = 1\\)", correct: false },
+                    { text: "B. \\(x = \\frac{4}{3}\\)", correct: false },
+                    { text: "C. \\(x = \\frac{5}{3}\\)", correct: true },
+                    { text: "D. \\(x = 2\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Ubah \\(125\\) menjadi basis \\(5\\): \\(125 = 5^3\\)<br>" +
+                    "• \\(5^{3x-2} = 5^3 \\implies 3x - 2 = 3 \\implies 3x = 5 \\implies x = \\frac{5}{3}\\)."
+            },
+            9: {
+                title: "Pos 9: Distribusi Masker N95 untuk Penduduk",
+                text: "Persediaan masker N95 di pos medis berkurang separuhnya setiap \\(3\\) jam mengikuti fungsi \\(M(t) = 512 \\times \\left(\\frac{1}{2}\\right)^{\\frac{t}{3}}\\). Berapa jumlah masker tersisa pada jam ke-6 (\\(t = 6\\))?",
+                options: [
+                    { text: "A. \\(256\\) buah", correct: false },
+                    { text: "B. \\(128\\) buah", correct: true },
+                    { text: "C. \\(64\\) buah", correct: false },
+                    { text: "D. \\(32\\) buah", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Substitusi \\(t = 6\\):<br>" +
+                    "• \\(M(6) = 512 \\times \\left(\\frac{1}{2}\\right)^{\\frac{6}{3}} = 512 \\times \\left(\\frac{1}{2}\\right)^2 = 512 \\times \\frac{1}{4} = 128\\) buah."
+            },
+            10: {
+                title: "Pos 10: Pemadaman Sektor Perbatasan Taman Nasional",
+                text: "Titik api terakhir di perbatasan utama Taman Nasional Bukit Tiga Puluh memenuhi persamaan basis sama \\(8^x = 2^6\\). Berapakah nilai \\(x\\)?",
+                options: [
+                    { text: "A. \\(x = 1\\)", correct: false },
+                    { text: "B. \\(x = 2\\)", correct: true },
+                    { text: "C. \\(x = 3\\)", correct: false },
+                    { text: "D. \\(x = 4\\)", correct: false }
+                ],
+                explanation: "<strong>Langkah Penyelesaian:</strong><br>" +
+                    "• Ubah \\(8\\) menjadi basis \\(2\\): \\(8 = 2^3 \\implies (2^3)^x = 2^{3x}\\)<br>" +
+                    "• \\(2^{3x} = 2^6 \\implies 3x = 6 \\implies x = 2\\)."
+            }
+        };
+
+        function startSimulation() {
+            playerName = document.getElementById('student-name').value.trim();
+            playerClass = document.getElementById('student-class').value.trim();
+            teacherPhone = document.getElementById('teacher-phone').value.trim();
+
+            if (!playerName || !playerClass) {
+                alert("Mohon isi Nama Lengkap dan Kelas terlebih dahulu!");
+                return;
+            }
+
+            document.getElementById('setup-modal').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            document.getElementById('player-info').innerText = `Siswa: ${playerName} | Kelas: ${playerClass}`;
+            
+            moveTruckToPos(1);
+        }
+
+        function moveTruckToPos(posNum) {
+            const truck = document.getElementById('truck-sprite');
+            const coords = posCoordinates[posNum];
+            truck.style.top = coords.top + '%';
+            truck.style.left = coords.left + '%';
+        }
+
+        function openPosQuestion(posNum) {
+            if (posNum !== currentPos) {
+                alert(`Selesaikan Pos ${currentPos} terlebih dahulu sebelum menuju Pos ${posNum}!`);
+                return;
+            }
+
+            const q = simulationQuestions[posNum];
+            document.getElementById('q-title').innerText = q.title;
+            document.getElementById('q-text').innerHTML = q.text;
+
+            // Hide explanation box and next button
+            document.getElementById('explanation-box').style.display = 'none';
+            document.getElementById('next-pos-btn').style.display = 'none';
+
+            const optionsContainer = document.getElementById('q-options');
+            optionsContainer.innerHTML = '';
+
+            q.options.forEach((opt) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerHTML = opt.text;
+                btn.onclick = () => submitAnswer(posNum, opt.correct, btn);
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('question-modal').style.display = 'flex';
+            
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        function submitAnswer(posNum, isCorrect, btnElement) {
+            const allBtns = document.querySelectorAll('.option-btn');
+            
+            if (isCorrect) {
+                allBtns.forEach(b => b.style.pointerEvents = 'none');
+                btnElement.classList.add('correct');
+                currentScore += 10;
+                document.getElementById('score-val').innerText = currentScore;
+                
+                // Show Pembahasan
+                const q = simulationQuestions[posNum];
+                document.getElementById('explanation-content').innerHTML = q.explanation;
+                document.getElementById('explanation-box').style.display = 'block';
+                document.getElementById('next-pos-btn').style.display = 'block';
+
+                document.getElementById('damaran-speech').innerText = `"${playerName}, jawabanmu tepat! Pelajari pembahasannya lalu klik 'Lanjutkan'!"`;
+
+                if (window.MathJax) {
+                    MathJax.typesetPromise();
+                }
+
+                // Trigger water spray effect
+                triggerWaterSpray(posNum);
+
+            } else {
+                btnElement.classList.add('wrong');
+                btnElement.style.pointerEvents = 'none';
+                document.getElementById('damaran-speech').innerText = `"${playerName}, jawaban kurang tepat. Silakan pilih opsi jawaban lain!"`;
+            }
+        }
+
+        function proceedToNextPos() {
+            document.getElementById('question-modal').style.display = 'none';
+            
+            // Extinguish fire at current pos (Api Padam & Hapus Animasi Api)
+            const node = document.getElementById(`pos-node-${currentPos}`);
+            const circle = document.getElementById(`circle-${currentPos}`);
+            node.classList.remove('active');
+            node.classList.add('cleared');
+            circle.innerText = '✓';
+
+            document.getElementById('progress-val').innerText = currentPos;
+
+            if (currentPos < 10) {
+                currentPos += 1;
+                
+                // Mobil melaju ke pos berikutnya
+                document.getElementById('damaran-speech').innerText = `"${playerName}, api di Pos ${currentPos - 1} padam! Mobil Damkar melaju ke Pos ${currentPos}..."`;
+                moveTruckToPos(currentPos);
+
+                setTimeout(() => {
+                    const nextNode = document.getElementById(`pos-node-${currentPos}`);
+                    nextNode.classList.add('active');
+                    document.getElementById('damaran-speech').innerText = `"${playerName}, kita telah tiba di Pos ${currentPos}. Klik pos ini untuk memadamkan api!"`;
+                }, 1500);
+
+            } else {
+                showReportModal();
+            }
+        }
+
+        function triggerWaterSpray(posNum) {
+            const spray = document.getElementById('water-spray');
+            const coords = posCoordinates[posNum];
+            spray.style.top = coords.top + '%';
+            spray.style.left = coords.left + '%';
+            spray.style.display = 'block';
+            setTimeout(() => {
+                spray.style.display = 'none';
+            }, 800);
+        }
+
+        function showReportModal() {
+            const reportDetails = document.getElementById('report-details');
+            reportDetails.innerHTML = `
+                <strong>Nama Siswa:</strong> ${playerName}<br>
+                <strong>Kelas:</strong> ${playerClass}<br>
+                <strong>Skor Akhir:</strong> ${currentScore} / 100<br>
+                <strong>Status Misi:</strong> TUNTAS (10/10 Titik Api Padam)
+            `;
+
+            const reportText = `[LAPORAN HASIL SIMULASI DAMKAR EKSPONENSIAL]\nNama Siswa: ${playerName}\nKelas: ${playerClass}\nSkor Akhir: ${currentScore}/100\nStatus Misi: TUNTAS Menyelamatkan Taman Nasional Bukit Tiga Puluh dari Kebakaran & Kabut Asap.`;
+            document.getElementById('report-text').value = reportText;
+
+            document.getElementById('report-modal').style.display = 'flex';
+        }
+
+        function copyReport() {
+            const reportText = document.getElementById('report-text');
+            reportText.select();
+            document.execCommand('copy');
+            alert("Salinan hasil skor siswa berhasil disalin ke clipboard!");
+        }
+
+        function sendToWhatsApp() {
+            const text = encodeURIComponent(document.getElementById('report-text').value);
+            let url = `https://api.whatsapp.com/send?text=${text}`;
+            if (teacherPhone) {
+                url = `https://api.whatsapp.com/send?phone=${teacherPhone}&text=${text}`;
+            }
+            window.open(url, '_blank');
+        }
+    </script>
+</body>
+</html>
